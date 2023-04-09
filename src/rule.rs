@@ -1,6 +1,6 @@
 use crate::cell::State;
 
-pub type Config = (State, State, State);
+pub type Config<'a> = (&'a State, &'a State, &'a State);
 #[derive(Debug)]
 pub struct WolframRule(bool, bool, bool, bool, bool, bool, bool, bool);
 
@@ -19,7 +19,7 @@ impl From<WolframRule> for u8 {
     }
 }
 
-pub fn do_slow_wolfram_rule(rule: WolframRule, input_cfg: Config) -> State {
+pub fn slow_wolfram(rule: WolframRule, input_cfg: Config) -> State {
     return match input_cfg {
         (State::ON, State::ON, State::ON) => { if rule.0 { State::ON} else { State::OFF }},     // 1
         (State::ON, State::ON, State::OFF) => { if rule.1 { State::ON} else { State::OFF }},    // 2
@@ -32,7 +32,7 @@ pub fn do_slow_wolfram_rule(rule: WolframRule, input_cfg: Config) -> State {
     }
 }
 
-pub fn do_wolfram_rule(rule: u8, input_cfg: Config) -> State {
+pub fn wolfram(rule: u8, input_cfg: Config) -> State {
     return match input_cfg {
         (State::ON, State::ON, State::ON) => { if (rule >> 7 & 1) == 1 { State::ON} else { State::OFF }},     // 1
         (State::ON, State::ON, State::OFF) => { if (rule >> 6 & 1) == 1 { State::ON} else { State::OFF }},    // 2
