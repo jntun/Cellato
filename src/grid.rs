@@ -1,26 +1,125 @@
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::ops::Div;
-use crate::{cell::{Cell, State}, cell};
+use crate::{
+    cell::{Cell, State},
+    rule,
+};
+
+pub type InitialCellConfig = Vec<(State, usize)>;
 
 pub enum GridError {
     Failure(String),
-}
-
-impl Display for GridError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        return match self {
-            GridError::Failure(failure) => {
-                f.write_str(failure)
-            },
-        }
-    }
+    InitialCellPosIsGreaterThanWidth(String),
+    CouldntWrapNeighborhood(String),
+    CouldntGetAdjacentCell(String, String),
 }
 
 pub struct Grid {
     width: usize,
-    height: usize,
+    epochs: usize,
     board: Vec<Vec<Cell>>,
     cell_count: usize,
+}
+
+impl Grid {
+    fn do_wolfram_row(prev_row: &Vec<Cell>, update_row: &mut Vec<Cell>, rule: u8) -> Result<(), GridError> {
+        for ((i, cell), update_cell) in prev_row.iter().enumerate().zip(update_row) {
+            let neighbor_lhs: &Cell;
+            let neighbor_rhs: &Cell;
+            if i == 0 {
+                let Some(lhs) = prev_row.get(prev_row.len()-1) else {
+                    return Err(GridError::CouldntWrapNeighborhood(String::from("left")))
+                };
+                let Some(rhs) = prev_row.get(i+1) else {
+                    return Err(GridError::CouldntGetAdjacentCell(String::from("right"), format!("{:?}", cell)));
+                };
+                neighbor_lhs = lhs;
+                neighbor_rhs = rhs;
+            } else if i == prev_row.len()-1 {
+                let Some(rhs) = prev_row.get(0) else {
+                    return Err(GridError::CouldntWrapNeighborhood(String::from("right")))
+                };
+                let Some(lhs) = prev_row.get(i-1) else {
+                    return Err(GridError::CouldntGetAdjacentCell(String::from("left"), format!("{:?}", update_cell)))
+                };
+                neighbor_rhs = rhs;
+                neighbor_lhs = lhs;
+            } else {
+                let Some(lhs) = prev_row.get(i-1) else {
+                    return Err(GridError::CouldntGetAdjacentCell(String::from("left"), format!("{:?}", update_cell)))
+                };
+                let Some(rhs) = prev_row.get(i+1) else {
+                    return Err(GridError::CouldntGetAdjacentCell(String::from("right"), format!("{:?}", update_cell)))
+                };
+                neighbor_lhs = lhs;
+                neighbor_rhs = rhs;
+            }
+            update_cell.state = rule::wolfram(rule, (&neighbor_lhs.state, &cell.state, &neighbor_rhs.state));
+        }
+        Ok(())
+    }
+
+    fn do_board_tick(&mut self, rule: u8) -> Result<(), GridError> {
+        for i in 0..self.board.len() {
+            if i == 0 {
+                continue
+            }
+            /*
+            let Some(prev_row) = self.board.get_mut(i-1) else {
+                return Err(GridError::Failure(format!("Failed to get prev_row at {}", i-1)))
+            };
+            let Some(update_row) = self.board.get_mut(i) else {
+                return Err(GridError::Failure(format!("Failed to get curr_row at {}", i)));
+            };
+
+            if let Err(e) = self.do_wolfram_row(prev_row, update_row, rule) {
+                return Err(e);
+            };
+             */
+            let (prev, update) = self.board.split_at_mut(i);
+            let Some(prev_row) = prev.last() else {
+                return Err(GridError::Failure(format!("Failed to get prev_row at {}", i)))
+            };
+            let Some(update_row) = update.first_mut() else {
+                return Err(GridError::Failure(format!("Failed to get update_row at {}", i)));
+            };
+
+            //println!("------------- iter {}------------\nprev: {:?}\n\nupdate: {:?}", i, prev_row, update_row);
+            if let Err(e) = Self::do_wolfram_row(prev_row, update_row, rule) {
+                return Err(e);
+            }
+
+        }
+        Ok(())
+    }
+
+
+    pub fn run_wolfram_rule(mut self, rule: u8, initial_cells: Option<InitialCellConfig>) -> Result<Self, GridError> {
+        if let Some(init_cells) = initial_cells {
+            for (cell, pos) in init_cells {
+                if pos > self.width {
+                    return Err(GridError::InitialCellPosIsGreaterThanWidth(format!("Cell cannot be placed outside of grid with, pos: {} width: {}", pos, self.width)))
+                }
+
+                let Some(replace_row) = self.board.get_mut(0) else {
+                    return Err(GridError::Failure(String::from("Failed to get initial row for grid.")));
+                };
+
+                let Some(replace_cell) = replace_row.get_mut(pos) else {
+                    return Err(GridError::Failure(String::from("Failed to get replace_cell from row.")))
+                };
+
+                replace_cell.state = cell;
+            }
+        }
+        for epoch in 0..self.epochs {
+            if let Err(e) = self.do_board_tick(rule) {
+                return Err(e)
+            };
+        }
+
+        Ok(self)
+    }
 }
 
 impl Grid {
@@ -30,27 +129,35 @@ impl Grid {
         id
     }
 
-    pub fn new(initial_state: State, width: usize, height: usize) -> Self {
-        let mut grid = Self {width, height, cell_count: 0, board: Vec::new()};
-        for i in 0..height {
-            let mut row: Vec<Cell> = Vec::new();
-            for x in 0..width {
-                grid.cell_count = i + x;
-                if i == 0 && x == width.div(2 as usize) {
-                    row.push(Cell::new(grid.cell_count, State::ON))
-                } else {
-                    row.push(Cell::default_grid_cell(grid.cell_count))
-                }
+    pub fn new(width: usize, epochs: usize) -> Self {
+        let mut grid = Self { width, epochs, cell_count: 0, board: Vec::new() };
+        for i in 0..epochs {
+            let mut row = Vec::new();
+            for i in 0..width {
+                row.push(Cell::default_grid_cell(i))
             }
             grid.board.push(row);
         }
         grid
     }
+}
 
-    pub fn run_wolfram_rule(mut self, epochs: usize, rule: u8, initial_cells: Option<Vec<(Cell, usize)>>) -> Result<Self, GridError> {
-        for i in 0..epochs+1 {
+impl Display for GridError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        return match self {
+            GridError::Failure(failure) => {
+                f.write_str(failure)
+            },
+            GridError::InitialCellPosIsGreaterThanWidth(msg) => {
+                f.write_str(format!("The initial cell(s) provided are out of the grid bounds: {}", msg).as_str())
+            },
+            GridError::CouldntWrapNeighborhood(side) => {
+                f.write_str(format!("Failed to wrap cell's neighborhood on the {} hand side of the grid", side).as_str())
+            }
+            GridError::CouldntGetAdjacentCell(side, cell) => {
+                f.write_str(format!("Failed to get {} side cell when trying {}", side, cell).as_str())
+            }
         }
-        Ok(self)
     }
 }
 
