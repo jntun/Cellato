@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter, Write};
 
+#[derive(Copy, Clone)]
 pub enum State {
     ON,
     OFF
@@ -14,9 +15,10 @@ impl Debug for State {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Cell {
     id: usize,
-    state: State,
+    pub state: State,
 }
 
 impl Cell {
