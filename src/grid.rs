@@ -102,11 +102,11 @@ impl Grid {
                 }
 
                 let Some(replace_row) = self.board.get_mut(0) else {
-                    return Err(GridError::Failure(String::from("Failed to get initial row for grid.")));
+                    return Err(GridError::Failure(String::from("Couldn't to get initial row for grid.")));
                 };
 
                 let Some(replace_cell) = replace_row.get_mut(pos) else {
-                    return Err(GridError::Failure(String::from("Failed to get replace_cell from row.")))
+                    return Err(GridError::Failure(format!("Couldn't get replace_cell from row. pos: {}", pos)))
                 };
 
                 replace_cell.state = cell;
